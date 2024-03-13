@@ -1,7 +1,8 @@
-const { mongoose, model } = require("mongoose");
+const { Schema, model } = require("mongoose");
 const { createHmac, randomBytes } = require("crypto");
+const { createJsonWebToken } = require("../services/authentication");
 
-const userSchema = new mongoose.Schema(
+const userSchema = new Schema(
   {
     fullName: {
       type: String,
@@ -21,7 +22,7 @@ const userSchema = new mongoose.Schema(
     },
     profileImageURL: {
       type: String,
-      default: "/public/images/userDefaultImage.png"
+      default: "/images/userDefaultImage.png"
     },
     role: {
       type: String,
@@ -47,9 +48,9 @@ userSchema.pre("save", function(next) {
   next();
 });
 
-userSchema.static("matchPassword", async function(email, password) {
-  const user =await User.findOne({ email });
-  if (!user) throw new Error('User not found!');
+userSchema.static("matchPasswordAndGenerateToken", async function(email, password) {
+  const user = await User.findOne({ email });
+  if (!user) throw new Error("User not found!");
 
   const salt = user.salt;
   const hashedPassword = user.password;
@@ -57,9 +58,12 @@ userSchema.static("matchPassword", async function(email, password) {
   const userProvidedHash = createHmac("sha256", salt)
     .update(password)
     .digest("hex");
-  
-  if (hashedPassword !== userProvidedHash)  throw new Error("Incorrect password!");
-  return {...user, password: undefined, salt: undefined};
+
+  if (hashedPassword !== userProvidedHash)
+    throw new Error("Incorrect password!");
+
+  const token = createJsonWebToken(user);
+  return token;
 });
 
 const User = model("user", userSchema);
